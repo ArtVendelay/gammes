@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Générateur de Ligne de Basse</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Fond sombre */
+            color: #e2e8f0; /* Texte clair */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #2d3748; /* Fond sombre légèrement plus clair */
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            width: 100%;
+            max-width: 600px; /* Augmenté pour accueillir les deux affichages */
+        }
+        .button {
+            background-color: #4299e1; /* Bleu */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: none;
+        }
+        .button:hover {
+            background-color: #3182ce; /* Bleu plus foncé au survol */
+        }
+        .button:active {
+            background-color: #2b6cb0; /* Bleu encore plus foncé au clic */
+            transform: translateY(1px);
+        }
+        .current-and-next-scale-display {
+            display: flex; /* Utilise flexbox pour aligner les éléments */
+            justify-content: center; /* Centre horizontalement */
+            align-items: baseline; /* Aligne les bases des textes */
+            margin-bottom: 2rem;
+            flex-wrap: wrap; /* Permet le retour à la ligne sur petits écrans */
+        }
+        .scale-display {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #63b3ed; /* Bleu clair pour l'emphase */
+            margin-right: 1rem; /* Espace entre la gamme actuelle et la prochaine */
+            white-space: nowrap; /* Empêche le retour à la ligne */
+            transition: background-color 0.1s ease-out; /* Pour l'effet visuel de l'accord */
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.5rem;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #4299e1;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 1rem auto;
+            display: none; /* Caché par default */
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .tempo-control {
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .tempo-control label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        .tempo-control input[type="range"] {
+            width: 100%;
+            -webkit-appearance: none;
+            height: 8px;
+            background: #4a5568;
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+        .tempo-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #63b3ed;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .tempo-control input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #63b3ed;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        /* Styles pour les cases à cocher */
+        .scale-selection-container {
+            text-align: left;
+        }
+        .scale-selection-container label {
+            font-weight: normal;
+        }
+        .form-checkbox {
+            accent-color: #4299e1; /* Couleur d'accentuation pour les cases à cocher */
+        }
+        .next-scale-display {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #90cdf4; /* Bleu clair plus doux */
+            background-color: rgba(45, 55, 72, 0.6); /* Fond sombre semi-transparent */
+            padding: 0.3rem 0.8rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            white-space: nowrap; /* Empêche le retour à la ligne */
+        }
+        @media (max-width: 480px) {
+            .current-and-next-scale-display {
+                flex-direction: column; /* Empile les éléments sur mobile */
+                align-items: center;
+            }
+            .scale-display {
+                margin-right: 0;
+                margin-bottom: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold mb-6">Générateur de Ligne de Basse</h1>
+        
+        <div class="current-and-next-scale-display">
+            <div id="scaleDisplay" class="scale-display">
+                Cliquez sur "Démarrer"
+            </div>
+            <div id="nextScaleDisplay" class="next-scale-display">
+                N/A
+            </div>
+        </div>
+
+        <div class="tempo-control">
+            <label for="tempoSlider">Tempo: <span id="bpmDisplay">100</span> BPM</label>
+            <input type="range" id="tempoSlider" min="60" max="200" value="100">
+        </div>
+
+        <button id="startButton" class="button w-full mb-4">Démarrer la génération</button>
+        <button id="stopButton" class="button w-full bg-red-500 hover:bg-red-600" disabled>Arrêter la génération</button>
+        <div id="loadingSpinner" class="loading-spinner"></div>
+
+        <div class="scale-selection-container mt-4 p-4 bg-gray-700 rounded-lg shadow-inner">
+            <h2 class="text-xl font-semibold mb-3 text-blue-300">Sélection des Gammes</h2>
+            <div class="flex justify-between mb-3">
+                <button id="selectAllButton" class="button text-sm px-3 py-1 bg-gray-600 hover:bg-gray-500">Tout sélectionner</button>
+                <button id="deselectAllButton" class="button text-sm px-3 py-1 bg-gray-600 hover:bg-gray-500">Tout désélectionner</button>
+            </div>
+            <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-left">
+                <div>
+                    <h3 class="font-bold text-blue-200 mb-2">Majeures</h3>
+                    <div id="majorScalesCheckboxes" class="flex flex-col">
+                        </div>
+                </div>
+                <div>
+                    <h3 class="font-bold text-blue-200 mb-2">Mineures</h3>
+                    <div id="minorScalesCheckboxes" class="flex flex-col">
+                        </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // NOTE IMPORTANTE : Si vous lancez ce fichier HTML directement depuis votre disque dur (protocole file://),
+        // les navigateurs modernes peuvent bloquer le démarrage de l'AudioContext et le chargement des modules
+        // audio (Web Workers/AudioWorklets) pour des raisons de sécurité.
+        // Pour une utilisation fiable, il est FORTEMENT RECOMMANDÉ de servir ce fichier via un serveur web local.
+        // Vous pouvez utiliser Python pour cela :
+        // 1. Ouvrez votre terminal/invite de commande.
+        // 2. Naviguez vers le dossier contenant ce fichier : cd /chemin/vers/votre/dossier
+        // 3. Lancez le serveur : python -m http.server (pour Python 3) ou python -m SimpleHTTPServer (pour Python 2)
+        // 4. Ouvrez votre navigateur et allez à http://localhost:8000/votre_fichier.html (adaptez le port si nécessaire).
+
+
+        // Initialisation de Tone.js
+        // La reprise du contexte audio est maintenant gérée directement dans startPlayback pour une meilleure fiabilité.
+        document.documentElement.addEventListener('mousedown', () => {
+            // Cette écouteur est conservé pour la compatibilité, mais le focus est sur startPlayback.
+            // Il aide à s'assurer que le contexte audio est résumé même si l'utilisateur clique ailleurs.
+            if (Tone.context.state !== 'running') {
+                Tone.context.resume();
+            }
+        });
+
+        // Synthétiseur pour la basse
+        const bassSynth = new Tone.FMSynth({
+            harmonicity: 0.8,
+            modulationIndex: 5,
+            oscillator: { type: "sine" },
+            envelope: {
+                attack: 0.005, // Attaque rapide
+                decay: 0.6,
+                sustain: 0.4, // Augmenté pour plus de tenue
+                release: 1.8 // Augmenté pour plus de tenue
+            },
+            modulation: { type: "triangle" },
+            modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0.0, release: 0.5 }
+        });
+        const bassFilter = new Tone.Filter(4000, "lowpass"); // Fréquence de coupure très haute pour laisser passer toutes les harmoniques
+        const bassReverb = new Tone.Reverb({ decay: 0.05, preDelay: 0.01 }); // Réverbération très courte, presque inexistante
+        const bassGain = new Tone.Gain(25.0).toDestination(); // Gain significativement augmenté pour la rendre très audible
+        bassSynth.chain(bassFilter, bassReverb, bassGain);
+
+
+        // Synthétiseur pour les accords (optimisé pour un son de piano électrique plus clair et agréable)
+        const chordSynth = new Tone.PolySynth(Tone.FMSynth, { // Utilisation de FMSynth pour un son plus riche et percussif
+            harmonicity: 3.0, // Ratio pour un son plus "cloche" ou "piano électrique"
+            modulationIndex: 10, // Intensité de la modulation
+            oscillator: {
+                type: "sine" // Oscillateur porteur
+            },
+            envelope: { // Enveloppe percussive et claire
+                attack: 0.005, // Très rapide
+                decay: 0.8,    // Décroissance légèrement plus longue
+                sustain: 0.2,  // Un peu plus de sustain pour une meilleure présence
+                release: 1.5   // Release plus long pour une meilleure tenue
+            },
+            modulation: {
+                type: "square" // Oscillateur modulateur carré pour des harmoniques distinctes
+            },
+            modulationEnvelope: {
+                attack: 0.005,
+                decay: 0.2,
+                sustain: 0.0,
+                release: 0.2
+            }
+        });
+
+        // Effets pour les accords
+        const chordEQ = new Tone.EQ3({ // Égaliseur pour sculpter le son
+            low: -5, // Moins de coupure dans les basses pour plus de corps
+            mid: 0,   // Laisser les médiums
+            high: 8   // Accentuer les aigus pour la brillance
+        });
+        const chordChorus = new Tone.Chorus(2, 3, 0.5); // Chorus pour l'épaisseur, ajusté
+        const chordFreeverb = new Tone.Freeverb({ // Réverbération plus naturelle
+            roomSize: 0.4,
+            dampening: 3000
+        });
+        const chordLimiter = new Tone.Limiter(-6); // Limiteur pour éviter l'écrêtage et uniformiser le volume
+        const chordGain = new Tone.Gain(3.0).toDestination(); // GAIN AJUSTÉ ICI : Ancien 15.0, Nouveau 3.0
+        // Chaînage des effets pour les accords
+        chordSynth.chain(chordEQ, chordChorus, chordFreeverb, chordLimiter, chordGain);
+
+        // Synthétiseur pour le métronome (kick/snare)
+        const metronomeSynth = new Tone.MembraneSynth({
+            pitchDecay: 0.01,
+            octaves: 8,
+            envelope: { attack: 0.001, decay: 0.2, sustain: 0.01, release: 0.1 }
+        }).toDestination();
+
+        // Synthétiseur pour le charleston (hi-hat)
+        const hiHatSynth = new Tone.MetalSynth({
+            frequency: 200,
+            envelope: { attack: 0.001, decay: 0.1, release: 0.05 },
+            harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5
+        }).toDestination();
+
+        // Synthétiseur pour la cymbale (crash)
+        const cymbalSynth = new Tone.MetalSynth({
+            frequency: 100, envelope: { attack: 0.001, decay: 1.2, release: 0.5 },
+            harmonicity: 8.5, modulationIndex: 40, resonance: 8000, octaves: 2
+        }).toDestination();
+
+        Tone.Transport.bpm.value = 100;
+
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const scaleDisplay = document.getElementById('scaleDisplay');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const tempoSlider = document.getElementById('tempoSlider');
+        const bpmDisplay = document.getElementById('bpmDisplay');
+        const nextScaleDisplay = document.getElementById('nextScaleDisplay');
+
+        let currentRootNoteName = 'C';
+        let currentScaleType = 'Majeur';
+        let currentRootChordNotes = ['C3', 'E3', 'G3'];
+        let currentBassNote = 'C3';
+
+        let nextRootNoteName = 'N/A';
+        let nextScaleType = '';
+
+        const allNotes = ["Ab", "A", "A#", "Bb", "B", "C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#"];
+        
+        const majorChordIntervals = [0, 4, 7];
+        const minorChordIntervals = [0, 3, 7];
+
+        let metronomeSequence;
+        let mainLoop;
+
+        function createScaleCheckboxes() {
+            const majorContainer = document.getElementById('majorScalesCheckboxes');
+            const minorContainer = document.getElementById('minorScalesCheckboxes');
+
+            allNotes.forEach(note => {
+                const majorDiv = document.createElement('div');
+                majorDiv.className = 'flex items-center';
+                majorDiv.innerHTML = `
+                    <input type="checkbox" id="scale_${note}_major" class="mr-2 form-checkbox" checked>
+                    <label for="scale_${note}_major">${note} Majeur</label>
+                `;
+                majorContainer.appendChild(majorDiv);
+
+                const minorDiv = document.createElement('div');
+                minorDiv.className = 'flex items-center';
+                minorDiv.innerHTML = `
+                    <input type="checkbox" id="scale_${note}_minor" class="mr-2 form-checkbox" checked>
+                    <label for="scale_${note}_minor">${note} Mineure</label>
+                `;
+                minorContainer.appendChild(minorDiv);
+            });
+        }
+
+        function updateStartButtonState() {
+            const allCheckboxes = document.querySelectorAll('.scale-selection-container input[type="checkbox"]');
+            let anyChecked = false;
+            allCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    anyChecked = true;
+                }
+            });
+            startButton.disabled = !anyChecked;
+            if (!anyChecked && Tone.Transport.state === 'started') {
+                stopPlayback();
+                scaleDisplay.textContent = 'Sélectionnez au moins une gamme !';
+                nextScaleDisplay.textContent = 'N/A';
+            } else if (anyChecked && Tone.Transport.state !== 'started' && scaleDisplay.textContent === 'Sélectionnez au moins une gamme !') {
+                 scaleDisplay.textContent = 'Cliquez sur "Démarrer"';
+            }
+        }
+
+        function generateRandomScale() {
+            const playableScales = [];
+            allNotes.forEach(note => {
+                const majorCheckbox = document.getElementById(`scale_${note}_major`);
+                const minorCheckbox = document.getElementById(`scale_${note}_minor`);
+
+                if (majorCheckbox && majorCheckbox.checked) {
+                    playableScales.push({ root: note, isMajor: true });
+                }
+                if (minorCheckbox && minorCheckbox.checked) {
+                    playableScales.push({ root: note, isMajor: false });
+                }
+            });
+
+            if (playableScales.length === 0) {
+                return null;
+            }
+
+            const randomIndex = Math.floor(Math.random() * playableScales.length);
+            return playableScales[randomIndex];
+        }
+
+        async function startPlayback() {
+            // Ensure audio context is resumed on user interaction
+            // This is crucial for local file playback in browsers.
+            try {
+                // Tone.start() handles resuming the audio context and starting the transport
+                // if it's not already running. It requires a user gesture.
+                await Tone.start();
+                console.log("AudioContext is running and Tone.Transport started.");
+            } catch (e) {
+                console.error("Failed to start Tone.js audio context:", e);
+                scaleDisplay.textContent = 'Erreur audio : Impossible de démarrer le son. Veuillez interagir avec la page.';
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                loadingSpinner.style.display = 'none';
+                return;
+            }
+
+            const allCheckboxes = document.querySelectorAll('.scale-selection-container input[type="checkbox"]');
+            let anyChecked = false;
+            allCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    anyChecked = true;
+                }
+            });
+
+            if (!anyChecked) {
+                scaleDisplay.textContent = 'Sélectionnez au moins une gamme pour démarrer !';
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                loadingSpinner.style.display = 'none';
+                nextScaleDisplay.textContent = 'N/A';
+                return;
+            }
+
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            loadingSpinner.style.display = 'block';
+            scaleDisplay.textContent = 'Démarrage...';
+            nextScaleDisplay.textContent = '...';
+
+            const initialCurrentScale = generateRandomScale();
+            if (!initialCurrentScale) {
+                stopPlayback();
+                return;
+            }
+            currentRootNoteName = initialCurrentScale.root;
+            currentScaleType = initialCurrentScale.isMajor ? 'Majeur' : 'Mineure';
+            const currentChordIntervals = initialCurrentScale.isMajor ? majorChordIntervals : minorChordIntervals;
+            currentRootChordNotes = currentChordIntervals.map(interval => Tone.Midi(currentRootNoteName + '3').toMidi() + interval).map(midi => Tone.Midi(midi).toNote());
+            currentBassNote = currentRootNoteName + '3';
+            scaleDisplay.textContent = `${currentRootNoteName} ${currentScaleType}`;
+
+            const initialNextScale = generateRandomScale();
+            if (!initialNextScale) {
+                stopPlayback();
+                return;
+            }
+            nextRootNoteName = initialNextScale.root;
+            nextScaleType = initialNextScale.isMajor ? 'Majeur' : 'Mineure';
+            nextScaleDisplay.textContent = `${nextRootNoteName} ${nextScaleType}`;
+
+            // Re-créer les séquences et boucles pour assurer un état frais à chaque démarrage
+            // Ceci est important pour éviter les problèmes de synchronisation après un arrêt/redémarrage.
+            metronomeSequence = new Tone.Sequence((time, beat) => {
+                console.log(`Métronome: Beat ${beat} at time ${time}`);
+                if (beat === 0) {
+                    metronomeSynth.triggerAttackRelease("G5", "16n", time, 0.4);
+                } else {
+                    metronomeSynth.triggerAttackRelease("C4", "16n", time, 0.2);
+                }
+                hiHatSynth.triggerAttackRelease("C6", "32n", time, 0.1);
+            }, [0, 1, 2, 3], "4n");
+
+            mainLoop = new Tone.Loop((time) => {
+                console.log(`MainLoop: Nouvelle mesure à ${time}`);
+                // La "prochaine" gamme de l'itération précédente devient la "gamme actuelle"
+                currentRootNoteName = nextRootNoteName;
+                currentScaleType = nextScaleType;
+                const currentChordIntervals = currentScaleType === 'Majeur' ? majorChordIntervals : minorChordIntervals;
+                currentRootChordNotes = currentChordIntervals.map(interval => Tone.Midi(currentRootNoteName + '3').toMidi() + interval).map(midi => Tone.Midi(midi).toNote());
+                currentBassNote = currentRootNoteName + '3';
+                scaleDisplay.textContent = `${currentRootNoteName} ${currentScaleType}`;
+
+                // Flash the background of scaleDisplay when the chord is played
+                scaleDisplay.style.backgroundColor = 'rgba(99, 179, 237, 0.3)'; // Light blue flash
+                setTimeout(() => {
+                    scaleDisplay.style.backgroundColor = 'transparent'; // Reset after a short delay
+                }, 100); // Flash duration
+
+                const newNextScale = generateRandomScale();
+                if (newNextScale) {
+                    nextRootNoteName = newNextScale.root;
+                    nextScaleType = newNextScale.isMajor ? 'Majeur' : 'Mineure';
+                    nextScaleDisplay.textContent = `${nextRootNoteName} ${nextScaleType}`;
+                } else {
+                    nextScaleDisplay.textContent = 'N/A';
+                    stopPlayback();
+                    return;
+                }
+                
+                cymbalSynth.triggerAttackRelease("C5", "1n", time);
+
+                // L'accord est maintenant une ronde (1n) pour durer toute la mesure
+                chordSynth.triggerAttackRelease(currentRootChordNotes, "1n", time);
+                console.log(`Accord déclenché: ${currentRootChordNotes} à ${time}`);
+
+
+                for (let i = 0; i < 4; i++) {
+                    bassSynth.triggerAttackRelease(currentBassNote, "4n", time + Tone.Time("4n").toSeconds() * i);
+                }
+
+                // L'accord est maintenant une ronde (1n) pour durer toute la mesure
+                chordSynth.triggerAttackRelease(currentRootChordNotes, "1n", time + Tone.Time("1m").toSeconds());
+                console.log(`Accord déclenché (2ème mesure): ${currentRootChordNotes} à ${time + Tone.Time("1m").toSeconds()}`);
+
+
+                for (let i = 0; i < 4; i++) {
+                    bassSynth.triggerAttackRelease(currentBassNote, "4n", time + Tone.Time("1m").toSeconds() + Tone.Time("4n").toSeconds() * i);
+                }
+
+            }, "2m"); // La boucle se répète toutes les 2 mesures
+
+            // Démarrer le transport et les séquences
+            Tone.Transport.start();
+            metronomeSequence.start(0);
+            mainLoop.start(0);
+            console.log("Tone.Transport, metronomeSequence, and mainLoop started.");
+
+            loadingSpinner.style.display = 'none';
+        }
+
+        function stopPlayback() {
+            console.log("Stopping playback...");
+            // Arrête les boucles et séquences s'ils existent et sont démarrés
+            if (mainLoop && mainLoop.state === 'started') {
+                mainLoop.stop();
+                console.log("mainLoop stopped.");
+            }
+            if (metronomeSequence && metronomeSequence.state === 'started') {
+                metronomeSequence.stop();
+                console.log("metronomeSequence stopped.");
+            }
+            
+            // Arrête le transport global et annule tous les événements
+            Tone.Transport.stop();
+            Tone.Transport.cancel(0); 
+            console.log("Tone.Transport stopped and events cancelled.");
+            
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            scaleDisplay.textContent = 'Cliquez sur "Démarrer"';
+            nextScaleDisplay.textContent = 'N/A';
+            scaleDisplay.style.backgroundColor = 'transparent'; // Reset background
+            console.log("Playback stopped successfully.");
+        }
+
+        startButton.addEventListener('click', startPlayback);
+        stopButton.addEventListener('click', stopPlayback);
+
+        tempoSlider.addEventListener('input', async (event) => {
+            const newBPM = event.target.value;
+            bpmDisplay.textContent = newBPM;
+            console.log(`Tempo changed to: ${newBPM} BPM`);
+
+            const wasPlaying = Tone.Transport.state === 'started';
+
+            if (wasPlaying) {
+                stopPlayback();
+            }
+
+            Tone.Transport.bpm.value = newBPM;
+
+            if (wasPlaying) {
+                const allCheckboxes = document.querySelectorAll('.scale-selection-container input[type="checkbox"]');
+                let anyChecked = false;
+                allCheckboxes.forEach(checkbox => {
+                    if (checkbox.checked) {
+                        anyChecked = true;
+                    }
+                });
+
+                if (anyChecked) {
+                    await startPlayback();
+                } else {
+                    scaleDisplay.textContent = 'Sélectionnez au moins une gamme pour continuer !';
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
+                }
+            }
+        });
+
+        const selectAllButton = document.getElementById('selectAllButton');
+        const deselectAllButton = document = document.getElementById('deselectAllButton');
+
+        selectAllButton.addEventListener('click', () => {
+            const allCheckboxes = document.querySelectorAll('.scale-selection-container input[type="checkbox"]');
+            allCheckboxes.forEach(checkbox => {
+                checkbox.checked = true;
+            });
+            updateStartButtonState();
+            console.log("All scales selected.");
+        });
+
+        deselectAllButton.addEventListener('click', () => {
+            const allCheckboxes = document.querySelectorAll('.scale-selection-container input[type="checkbox"]');
+            allCheckboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            updateStartButtonState();
+            console.log("All scales deselected.");
+        });
+
+        document.addEventListener('change', (event) => {
+            if (event.target.matches('.scale-selection-container input[type="checkbox"]')) {
+                updateStartButtonState();
+                console.log(`Checkbox changed: ${event.target.id}, checked: ${event.target.checked}`);
+            }
+        });
+
+        window.onload = () => {
+            createScaleCheckboxes();
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            loadingSpinner.style.display = 'none';
+            bpmDisplay.textContent = tempoSlider.value;
+            updateStartButtonState();
+            console.log("Page loaded and initialized.");
+        };
+    </script>
+</body>
+</html>
