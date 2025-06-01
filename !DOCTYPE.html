@@ -145,6 +145,9 @@
                 margin-bottom: 0.5rem;
             }
         }
+        .volume-controls .tempo-control {
+            margin-bottom: 0.75rem; /* Réduit l'espace entre les curseurs de volume */
+        }
     </style>
 </head>
 <body>
@@ -188,6 +191,20 @@
                 </div>
             </div>
         </div>
+
+        <div class="volume-controls mt-4 p-4 bg-gray-700 rounded-lg shadow-inner">
+            <h2 class="text-xl font-semibold mb-3 text-blue-300">Contrôle du Volume</h2>
+            <div class="tempo-control">
+                <label for="metronomeVolumeSlider">Métronome: <span id="metronomeVolumeDisplay">1.0</span></label>
+                <input type="range" id="metronomeVolumeSlider" min="0" max="20" value="10"> </div>
+            <div class="tempo-control">
+                <label for="bassVolumeSlider">Basse: <span id="bassVolumeDisplay">25.0</span></label>
+                <input type="range" id="bassVolumeSlider" min="0" max="500" value="250"> </div>
+            <div class="tempo-control">
+                <label for="chordsVolumeSlider">Accords: <span id="chordsVolumeDisplay">3.0</span></label>
+                <input type="range" id="chordsVolumeSlider" min="0" max="100" value="30"> </div>
+        </div>
+
     </div>
 
     <script>
@@ -203,10 +220,7 @@
 
 
         // Initialisation de Tone.js
-        // La reprise du contexte audio est maintenant gérée directement dans startPlayback pour une meilleure fiabilité.
         document.documentElement.addEventListener('mousedown', () => {
-            // Cette écouteur est conservé pour la compatibilité, mais le focus est sur startPlayback.
-            // Il aide à s'assurer que le contexte audio est résumé même si l'utilisateur clique ailleurs.
             if (Tone.context.state !== 'running') {
                 Tone.context.resume();
             }
@@ -226,50 +240,33 @@
             modulation: { type: "triangle" },
             modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0.0, release: 0.5 }
         });
-        const bassFilter = new Tone.Filter(4000, "lowpass"); // Fréquence de coupure très haute pour laisser passer toutes les harmoniques
-        const bassReverb = new Tone.Reverb({ decay: 0.05, preDelay: 0.01 }); // Réverbération très courte, presque inexistante
-        const bassGain = new Tone.Gain(25.0).toDestination(); // Gain significativement augmenté pour la rendre très audible
+        const bassFilter = new Tone.Filter(4000, "lowpass");
+        const bassReverb = new Tone.Reverb({ decay: 0.05, preDelay: 0.01 });
+        const bassGain = new Tone.Gain(25.0).toDestination(); // Gain initial pour la basse
         bassSynth.chain(bassFilter, bassReverb, bassGain);
 
 
-        // Synthétiseur pour les accords (optimisé pour un son de piano électrique plus clair et agréable)
-        const chordSynth = new Tone.PolySynth(Tone.FMSynth, { // Utilisation de FMSynth pour un son plus riche et percussif
-            harmonicity: 3.0, // Ratio pour un son plus "cloche" ou "piano électrique"
-            modulationIndex: 10, // Intensité de la modulation
-            oscillator: {
-                type: "sine" // Oscillateur porteur
-            },
-            envelope: { // Enveloppe percussive et claire
-                attack: 0.005, // Très rapide
-                decay: 0.8,    // Décroissance légèrement plus longue
-                sustain: 0.2,  // Un peu plus de sustain pour une meilleure présence
-                release: 1.5   // Release plus long pour une meilleure tenue
-            },
-            modulation: {
-                type: "square" // Oscillateur modulateur carré pour des harmoniques distinctes
-            },
-            modulationEnvelope: {
+        // Synthétiseur pour les accords
+        const chordSynth = new Tone.PolySynth(Tone.FMSynth, {
+            harmonicity: 3.0,
+            modulationIndex: 10,
+            oscillator: { type: "sine" },
+            envelope: {
                 attack: 0.005,
-                decay: 0.2,
-                sustain: 0.0,
-                release: 0.2
-            }
+                decay: 0.8,
+                sustain: 0.2,
+                release: 1.5
+            },
+            modulation: { type: "square" },
+            modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0.0, release: 0.2 }
         });
 
         // Effets pour les accords
-        const chordEQ = new Tone.EQ3({ // Égaliseur pour sculpter le son
-            low: -5, // Moins de coupure dans les basses pour plus de corps
-            mid: 0,   // Laisser les médiums
-            high: 8   // Accentuer les aigus pour la brillance
-        });
-        const chordChorus = new Tone.Chorus(2, 3, 0.5); // Chorus pour l'épaisseur, ajusté
-        const chordFreeverb = new Tone.Freeverb({ // Réverbération plus naturelle
-            roomSize: 0.4,
-            dampening: 3000
-        });
-        const chordLimiter = new Tone.Limiter(-6); // Limiteur pour éviter l'écrêtage et uniformiser le volume
-        const chordGain = new Tone.Gain(3.0).toDestination(); // GAIN AJUSTÉ ICI : Ancien 15.0, Nouveau 3.0
-        // Chaînage des effets pour les accords
+        const chordEQ = new Tone.EQ3({ low: -5, mid: 0, high: 8 });
+        const chordChorus = new Tone.Chorus(2, 3, 0.5);
+        const chordFreeverb = new Tone.Freeverb({ roomSize: 0.4, dampening: 3000 });
+        const chordLimiter = new Tone.Limiter(-6);
+        const chordGain = new Tone.Gain(3.0).toDestination(); // Gain initial pour les accords
         chordSynth.chain(chordEQ, chordChorus, chordFreeverb, chordLimiter, chordGain);
 
         // Synthétiseur pour le métronome (kick/snare)
@@ -277,16 +274,21 @@
             pitchDecay: 0.01,
             octaves: 8,
             envelope: { attack: 0.001, decay: 0.2, sustain: 0.01, release: 0.1 }
-        }).toDestination();
-
+        }); // Ne pas toDestination ici, on va le chaîner au metronomeGain
+        
         // Synthétiseur pour le charleston (hi-hat)
         const hiHatSynth = new Tone.MetalSynth({
             frequency: 200,
             envelope: { attack: 0.001, decay: 0.1, release: 0.05 },
             harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5
-        }).toDestination();
+        }); // Ne pas toDestination ici
+        
+        // Gain maître pour le métronome et le charleston
+        const metronomeGain = new Tone.Gain(1.0).toDestination(); // Gain initial pour le métronome
+        metronomeSynth.connect(metronomeGain);
+        hiHatSynth.connect(metronomeGain);
 
-        // Synthétiseur pour la cymbale (crash)
+        // Synthétiseur pour la cymbale (crash) - reste direct à la destination
         const cymbalSynth = new Tone.MetalSynth({
             frequency: 100, envelope: { attack: 0.001, decay: 1.2, release: 0.5 },
             harmonicity: 8.5, modulationIndex: 40, resonance: 8000, octaves: 2
@@ -301,6 +303,15 @@
         const tempoSlider = document.getElementById('tempoSlider');
         const bpmDisplay = document.getElementById('bpmDisplay');
         const nextScaleDisplay = document.getElementById('nextScaleDisplay');
+
+        // Nouveaux éléments de volume
+        const metronomeVolumeSlider = document.getElementById('metronomeVolumeSlider');
+        const metronomeVolumeDisplay = document.getElementById('metronomeVolumeDisplay');
+        const bassVolumeSlider = document.getElementById('bassVolumeSlider');
+        const bassVolumeDisplay = document.getElementById('bassVolumeDisplay');
+        const chordsVolumeSlider = document.getElementById('chordsVolumeSlider');
+        const chordsVolumeDisplay = document.getElementById('chordsVolumeDisplay');
+
 
         let currentRootNoteName = 'C';
         let currentScaleType = 'Majeur';
@@ -382,11 +393,7 @@
         }
 
         async function startPlayback() {
-            // Ensure audio context is resumed on user interaction
-            // This is crucial for local file playback in browsers.
             try {
-                // Tone.start() handles resuming the audio context and starting the transport
-                // if it's not already running. It requires a user gesture.
                 await Tone.start();
                 console.log("AudioContext is running and Tone.Transport started.");
             } catch (e) {
@@ -442,8 +449,6 @@
             nextScaleType = initialNextScale.isMajor ? 'Majeur' : 'Mineure';
             nextScaleDisplay.textContent = `${nextRootNoteName} ${nextScaleType}`;
 
-            // Re-créer les séquences et boucles pour assurer un état frais à chaque démarrage
-            // Ceci est important pour éviter les problèmes de synchronisation après un arrêt/redémarrage.
             metronomeSequence = new Tone.Sequence((time, beat) => {
                 console.log(`Métronome: Beat ${beat} at time ${time}`);
                 if (beat === 0) {
@@ -456,7 +461,6 @@
 
             mainLoop = new Tone.Loop((time) => {
                 console.log(`MainLoop: Nouvelle mesure à ${time}`);
-                // La "prochaine" gamme de l'itération précédente devient la "gamme actuelle"
                 currentRootNoteName = nextRootNoteName;
                 currentScaleType = nextScaleType;
                 const currentChordIntervals = currentScaleType === 'Majeur' ? majorChordIntervals : minorChordIntervals;
@@ -464,11 +468,10 @@
                 currentBassNote = currentRootNoteName + '3';
                 scaleDisplay.textContent = `${currentRootNoteName} ${currentScaleType}`;
 
-                // Flash the background of scaleDisplay when the chord is played
-                scaleDisplay.style.backgroundColor = 'rgba(99, 179, 237, 0.3)'; // Light blue flash
+                scaleDisplay.style.backgroundColor = 'rgba(99, 179, 237, 0.3)';
                 setTimeout(() => {
-                    scaleDisplay.style.backgroundColor = 'transparent'; // Reset after a short delay
-                }, 100); // Flash duration
+                    scaleDisplay.style.backgroundColor = 'transparent';
+                }, 100);
 
                 const newNextScale = generateRandomScale();
                 if (newNextScale) {
@@ -483,7 +486,6 @@
                 
                 cymbalSynth.triggerAttackRelease("C5", "1n", time);
 
-                // L'accord est maintenant une ronde (1n) pour durer toute la mesure
                 chordSynth.triggerAttackRelease(currentRootChordNotes, "1n", time);
                 console.log(`Accord déclenché: ${currentRootChordNotes} à ${time}`);
 
@@ -492,7 +494,6 @@
                     bassSynth.triggerAttackRelease(currentBassNote, "4n", time + Tone.Time("4n").toSeconds() * i);
                 }
 
-                // L'accord est maintenant une ronde (1n) pour durer toute la mesure
                 chordSynth.triggerAttackRelease(currentRootChordNotes, "1n", time + Tone.Time("1m").toSeconds());
                 console.log(`Accord déclenché (2ème mesure): ${currentRootChordNotes} à ${time + Tone.Time("1m").toSeconds()}`);
 
@@ -501,9 +502,8 @@
                     bassSynth.triggerAttackRelease(currentBassNote, "4n", time + Tone.Time("1m").toSeconds() + Tone.Time("4n").toSeconds() * i);
                 }
 
-            }, "2m"); // La boucle se répète toutes les 2 mesures
+            }, "2m");
 
-            // Démarrer le transport et les séquences
             Tone.Transport.start();
             metronomeSequence.start(0);
             mainLoop.start(0);
@@ -514,7 +514,6 @@
 
         function stopPlayback() {
             console.log("Stopping playback...");
-            // Arrête les boucles et séquences s'ils existent et sont démarrés
             if (mainLoop && mainLoop.state === 'started') {
                 mainLoop.stop();
                 console.log("mainLoop stopped.");
@@ -524,7 +523,6 @@
                 console.log("metronomeSequence stopped.");
             }
             
-            // Arrête le transport global et annule tous les événements
             Tone.Transport.stop();
             Tone.Transport.cancel(0); 
             console.log("Tone.Transport stopped and events cancelled.");
@@ -533,7 +531,7 @@
             stopButton.disabled = true;
             scaleDisplay.textContent = 'Cliquez sur "Démarrer"';
             nextScaleDisplay.textContent = 'N/A';
-            scaleDisplay.style.backgroundColor = 'transparent'; // Reset background
+            scaleDisplay.style.backgroundColor = 'transparent';
             console.log("Playback stopped successfully.");
         }
 
@@ -572,8 +570,28 @@
             }
         });
 
+        // Écouteurs pour les nouveaux curseurs de volume
+        metronomeVolumeSlider.addEventListener('input', (event) => {
+            const value = parseFloat(event.target.value) / 10.0; // Map 0-20 to 0-2.0
+            metronomeGain.gain.value = value;
+            metronomeVolumeDisplay.textContent = value.toFixed(1);
+        });
+
+        bassVolumeSlider.addEventListener('input', (event) => {
+            const value = parseFloat(event.target.value) / 10.0; // Map 0-500 to 0-50.0
+            bassGain.gain.value = value;
+            bassVolumeDisplay.textContent = value.toFixed(1);
+        });
+
+        chordsVolumeSlider.addEventListener('input', (event) => {
+            const value = parseFloat(event.target.value) / 10.0; // Map 0-100 to 0-10.0
+            chordGain.gain.value = value;
+            chordsVolumeDisplay.textContent = value.toFixed(1);
+        });
+
+
         const selectAllButton = document.getElementById('selectAllButton');
-        const deselectAllButton = document = document.getElementById('deselectAllButton');
+        const deselectAllButton = document.getElementById('deselectAllButton');
 
         selectAllButton.addEventListener('click', () => {
             const allCheckboxes = document.querySelectorAll('.scale-selection-container input[type="checkbox"]');
@@ -607,6 +625,17 @@
             loadingSpinner.style.display = 'none';
             bpmDisplay.textContent = tempoSlider.value;
             updateStartButtonState();
+
+            // Initialiser les affichages des volumes
+            metronomeVolumeDisplay.textContent = metronomeGain.gain.value.toFixed(1);
+            bassVolumeDisplay.textContent = bassGain.gain.value.toFixed(1);
+            chordsVolumeDisplay.textContent = chordGain.gain.value.toFixed(1);
+
+            // S'assurer que les curseurs sont positionnés correctement au chargement
+            metronomeVolumeSlider.value = metronomeGain.gain.value * 10;
+            bassVolumeSlider.value = bassGain.gain.value * 10;
+            chordsVolumeSlider.value = chordGain.gain.value * 10;
+
             console.log("Page loaded and initialized.");
         };
     </script>
